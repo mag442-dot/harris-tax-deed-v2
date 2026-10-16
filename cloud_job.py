@@ -39,7 +39,7 @@ def execute(bucket, sale_date, not_found, precondition_failed):
                 raise RuntimeError('GIS batches blocked; refusing latest-state publication')
             enriched = json.loads((root / 'enrichment/enriched.json').read_text())
             if os.environ.get('ENABLE_FEMA', 'true').lower() == 'true':
-                enrich_flood(enriched, root / 'flood')
+                enrich_flood(enriched, root / 'flood', previous=json.loads(previous) if previous else None)
                 enriched = json.loads((root / 'flood/enriched.json').read_text())
             for path in root.rglob('*'):
                 if path.is_file() and path.name != 'run.lock' and path.name != 'latest.json':
