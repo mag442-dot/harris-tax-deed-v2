@@ -1,33 +1,37 @@
 # Harris Tax Deed V2
 
-Independent implementation of a persistent Harris County auction research pipeline. Built from scratch; the separate Claude project is not a code dependency.
+Independent implementation of Harris County auction ingestion and official parcel GIS enrichment, built from scratch.
 
-## Current status
+## Working and verified
 
-Repository initialized. No pipeline, cloud deployment, scheduler, source validation, or Google Sheets synchronization has been verified in this repository yet. Earlier ZIP prototypes are not production deployments.
+- Official listing download succeeds from GitHub Actions.
+- Parser preserves accounts, causes, precincts, sale numbers, types, bids, addresses and legal descriptions.
+- Grouped sales, special proceedings, fractional interests and missing details remain explicit review items. No automatic bid recommendations.
+- Immutable local source snapshots, audit logs, atomic last-accepted state and sale-specific change history.
+- Batch HCAD parcel GIS enrichment retains official responses, geometries, tax year, area, values, situs address and legal text.
+- CI tests and a separate live-source integration workflow execute outside the chat.
+- Cloud Run entrypoint and image definition use Cloud Storage for durable evidence and conditional state publication. Cloud storage behavior is tested with fake storage objects; real deployment is pending.
 
-## Target architecture
+## Latest verified source run
 
-GitHub source and CI → Google Cloud Run Job → Cloud Scheduler (America/Chicago). Cloud Storage holds immutable source snapshots and HCAD bulk files; a persistent state store holds versioned property records. Google Sheets is a reporting destination, not the primary database. Secret Manager holds credentials.
+For November 3, 2026: 182 listing accounts; 164 complete listing addresses and 159 listing legal descriptions. Missing fields stay unknown. Official parcel GIS matched 181 accounts for tax year 2026, with land area for 181 and market value for 178. Account 1163550010076 needs an alternate official lookup.
 
-## Delivery gates
+## Run
 
-1. Implement and test the official listing parser against retained source fixtures. Verify the auction date from source evidence, preserve 13-character account identifiers, model grouped accounts separately from auction lots, and retain special proceedings for review.
-2. Add an idempotent orchestrator with bounded retries, resumable stages, source provenance, immutable snapshots, and change detection. A missing account means missing pending review, not confirmed cancellation.
-3. Enrich from official HCAD data and parcel GIS. Preserve unknown exemption status; do not treat missing data as absence of homestead. Track source dates and stale observations.
-4. Add parcel-based flood checks with coverage and intersection evidence. Missing flood coverage is unknown, not low risk.
-5. Publish into a dedicated staging Sheet tab only after quality gates pass, preserving historical research and manual warnings. Group bids must never be summed as separate purchases.
-6. Deploy and execute in Google Cloud, then verify scheduler configuration, job completion, persisted outputs, reporting and failure handling before calling the system automated.
-7. Add documented underwriting assumptions, supported comparable evidence, duplex feasibility checks and title research queues. Incomplete evidence must block bid recommendations.
+```bash
+python -m unittest discover -s tests -v
+python pipeline.py --sale-date 2026-11-03 --state-dir state
+python enrich.py --inventory state/2026-11-03/latest.json --out state/enrichment
+```
 
-## Investment scope
+The local pipeline uses Python 3.12 standard library. Cloud execution additionally requires `requirements.txt`, application-default credentials, `STATE_BUCKET` and `SALE_DATE`. Build the cloud image with `Dockerfile.cloud`. Do not store production state solely on the Cloud Run temporary filesystem.
 
-Favor vacant land in northern Houston toward The Woodlands; exclude Baytown and confirmed homestead under the current strategy. No fixed acquisition price cap. Investigate grouped and fractional interests, special proceedings, flood risk, restrictions and potential duplex construction. Preserve facts separately from inferences and investment decisions.
+## Remaining work
 
-## Data contract
+Real GCP deployment, scheduled execution, Google Sheets staging publication, exemption evidence, flood analysis, comparables, title research and duplex underwriting are not complete. Homestead and flood remain unknown. HCAD appraised or market values are not verified resale comparables. Grouped account membership is not a verified auction-lot identity.
 
-Each observation records value, status, source URL or snapshot reference, retrieval time and notes. Unknown, blocked, stale and verified are distinct states. Account membership and auction lot identity are separate. Every run records source hash, effective sale date, counts, quality results, changes and stage failures.
+Target infrastructure: GitHub → Cloud Run Jobs → Cloud Scheduler (America/Chicago) → Cloud Storage → reporting to Google Sheets. Source data and code are separate. No credentials or private exports belong in this public repository.
 
-## Security and operations
+Investment scope favors vacant land in northern Houston toward The Woodlands; excludes Baytown and confirmed homestead; has no fixed acquisition price cap. Incomplete legal or physical evidence blocks bid recommendations.
 
-Never commit credentials, tokens, service-account keys, webhook secrets, private exports or bulk datasets. Use workload identity for CI deployment where possible and least-privilege runtime identities. Configuration examples must contain placeholders only. Cloud deployment and billing state remain unverified.
+See OPERATIONS.md for verification evidence and deployment limitations.
