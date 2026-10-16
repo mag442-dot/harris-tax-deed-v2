@@ -23,8 +23,8 @@ jobs:
         run: python pipeline.py --sale-date 2026-11-03 --state-dir state
       - name: Enrich all accounts against official parcel GIS
         run: python enrich.py --inventory state/2026-11-03/latest.json --out state/enrichment
-      - name: Probe FEMA for three parcel geometries and retain any source errors
-        run: python flood.py --inventory state/enrichment/enriched.json --out state/flood --limit 3
+      - name: Query FEMA for every available parcel geometry and retain source errors
+        run: python flood.py --inventory state/enrichment/enriched.json --out state/flood
       - uses: actions/upload-artifact@v4
         if: always()
         with:
