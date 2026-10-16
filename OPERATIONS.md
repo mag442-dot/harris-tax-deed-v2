@@ -1,6 +1,6 @@
 # Implemented baseline
 
-`python -m unittest discover -s tests -v` runs 21 offline regression checks.
+`python -m unittest discover -s tests -v` runs 26 offline regression checks.
 
 `python pipeline.py --sale-date 2026-11-03 --state-dir state` fetches the official listing, validates the source sale date and auction identifiers, and saves raw snapshots, audit records, account records and changes.
 
@@ -30,13 +30,17 @@ There are no bid recommendations, title clearances, market valuations or duplex 
 
 ## Provisional unattended execution
 
-`.github/workflows/refresh.yml` runs the listing and HCAD pipeline daily at 8:47 AM Houston. Two UTC cron triggers plus a daylight-saving selector choose one daily run; GitHub schedules can be delayed. The sale date is explicitly November 3, 2026 and execution stops after that local date. Update configuration and validate the next source before using it for another sale.
+`.github/workflows/refresh.yml` runs the listing, HCAD and FEMA pipeline daily at 8:47 AM Houston. Two UTC cron triggers plus a daylight-saving selector choose one daily run; GitHub schedules can be delayed. The sale date is explicitly November 3, 2026 and execution stops after that local date. Update configuration and validate the next source before using it for another sale.
 
 The prior accepted listing is restored from GitHub Actions cache when available. Cache can be evicted; a missing baseline produces NEW records rather than inferred cancellations. Each run uploads source and enrichment evidence for 90 days. This is provisional retention, not the permanent GCS data store. Workflow artifacts do not include private manual historical notes, and the daily workflow does not refresh Sheets.
 
 The existing Google workbook now contains a separate V2 Inventory report with 182 unique accounts, 179 for-sale records and three cancellations. This initial publication used the connected account and retained 44 account-specific historical warnings. It did not change Master formulas or historical tabs. Native value and formatting readback succeeded; browser rendering was unavailable.
 
-`flood.py` queries FEMA using full parcel rings in EPSG:4326, records the intersecting hazard zones, and never interprets a missing response as safe. It does not calculate coverage percentages or prove that the whole parcel is mapped. Three consecutive source failures open a circuit rather than sending requests for the remaining accounts. Live FEMA validation remains separate from successful listing/HCAD checks.
+`flood.py` queries FEMA using full parcel rings in EPSG:4326, records the intersecting hazard zones, and never interprets a missing response as safe. It does not calculate coverage percentages or prove that the whole parcel is mapped. Three consecutive source failures open a circuit rather than sending requests for the remaining accounts. Each request has at most one retry for transient errors, with spacing between requests. Successful observations younger than seven days are reused only for an identical parcel geometry, retaining the original timestamp; the next run can work on unresolved accounts. The workflow cache now includes flood observations as well as the listing baseline.
+
+Verified FEMA result: the second full attempt returned 72 parcel observations (57 X, 13 AE, one AO and one mixed AE/X), with 15 SFHA intersections and four floodway intersections. Three requests failed and 106 were skipped after the failure circuit opened; one account had no parcel geometry. These observations were published in V2 Inventory with source links and observation dates. This is partial coverage, not a flood clearance. MAAPnext remains unimplemented.
+
+`sheets_sync.py` reads the live report header before updating its machine-owned tab, retrieves historical warnings, preserves account strings, and verifies the account column after publication. It refuses unfamiliar staging content and never modifies sharing or historical tabs. Cloud Run can enable it with SPREADSHEET_ID after the runtime identity receives editor access. This authenticated runtime path remains unverified; connector-based initial publication and readback succeeded.
 
 ## Deployment access blocker
 
