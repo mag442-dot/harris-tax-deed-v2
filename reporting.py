@@ -5,7 +5,7 @@ HEADERS = ['Account', 'Sale Date', 'Sale Status', 'Research Action', 'Listing Ad
            'HCAD Address', 'Lot SF', 'Minimum Bid', 'HCAD Market Value', 'Building Value',
            'HCAD Tax Year', 'Sale Type', 'Precinct', 'Cause', 'Grouped', 'Group Target',
            'Flags', 'Homestead', 'Flood', 'Listing Legal', 'HCAD Legal', 'Historical Warning',
-           'Listing Source', 'HCAD Source', 'GIS Retrieved UTC', 'State Class']
+           'Listing Source', 'HCAD Source', 'GIS Retrieved UTC', 'State Class', 'FEMA Source']
 
 
 def report_rows(document, warnings=None):
@@ -13,10 +13,26 @@ def report_rows(document, warnings=None):
     matrix = [HEADERS]
     for row in document['records']:
         g = row.get('hcad_gis', {})
+        fema = row.get('fema', {})
         flags = list(row.get('flags', []))
         warning = warnings.get(row['account'], '')
         address = ' '.join((str(row.get('address') or ''), str(g.get('address') or '')))
         action = row['action']
+        flood_text = row.get('flood_status', 'UNKNOWN')
+        if fema:
+            flood_text = fema['status']
+            if fema['status'] == 'INTERSECTION_OBSERVED':
+                flood_text += ': ' + '/'.join(fema.get('zones', []))
+                flood_text += ' | ' + '; '.join(fema.get('subtypes', []))
+                flood_text += ' | coverage not measured'
+            if fema.get('sfha_intersects'):
+                flags.append('FEMA_SFHA_INTERSECTION')
+                if action != 'NO_BID':
+                    action = 'HOLD'
+            if fema.get('floodway_intersects'):
+                flags.append('FEMA_FLOODWAY_INTERSECTION')
+                if action != 'NO_BID':
+                    action = 'HOLD'
         if re.search(r'\bBAYTOWN\b', address, re.I):
             flags.append('EXCLUDED_BAYTOWN')
             action = 'NO_BID'
@@ -32,9 +48,9 @@ def report_rows(document, warnings=None):
                        g.get('market_value'), g.get('building_value'), g.get('tax_year'), row.get('sale_type'),
                        row.get('precinct'), row.get('cause'), row.get('grouped'), row.get('group_target'),
                        '; '.join(dict.fromkeys(flags)), row.get('homestead_status', 'UNKNOWN'),
-                       row.get('flood_status', 'UNKNOWN'), row.get('legal_description'),
+                       flood_text, row.get('legal_description'),
                        g.get('legal_description'), warning, document['audit']['source'],
-                       g.get('source'), g.get('retrieved_at'), g.get('state_class')])
+                       g.get('source'), g.get('retrieved_at'), g.get('state_class'), fema.get('source')])
     return matrix
 
 
