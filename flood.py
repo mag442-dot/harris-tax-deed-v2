@@ -4,7 +4,7 @@ import json
 import urllib.request
 import urllib.error
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from urllib.parse import urlencode
 from pipeline import atomic_json
@@ -58,16 +58,28 @@ def summarize(data):
                 note='Intersections only; no parcel-area percentages or full-coverage conclusion.')
 
 
-def enrich_flood(document, directory, limit=None):
+def enrich_flood(document, directory, limit=None, previous=None):
     root = Path(directory)
     output = []
     consecutive_failures = 0
     queried = 0
+    prior = {r['account']: r for r in (previous or {}).get('records', [])}
     for row in document['records']:
         geometry = row.get('hcad_gis', {}).get('geometry')
         observation = dict(source=LAYER, retrieved_at=datetime.now(timezone.utc).isoformat())
+        old = prior.get(row['account'], {})
+        cached = old.get('fema', {})
+        recent = False
+        try:
+            age = datetime.now(timezone.utc) - datetime.fromisoformat(cached['retrieved_at'])
+            recent = timedelta(0) <= age <= timedelta(days=7)
+        except (KeyError, ValueError, TypeError):
+            pass
         if not geometry:
             observation.update(status='NO_PARCEL_GEOMETRY')
+        elif (cached.get('status') == 'INTERSECTION_OBSERVED' and recent
+              and old.get('hcad_gis', {}).get('geometry') == geometry):
+            observation = dict(cached, cache_reused=True)
         elif limit is not None and queried >= limit:
             observation.update(status='NOT_QUERIED_LIMIT')
         elif consecutive_failures >= 3:
@@ -97,5 +109,7 @@ if __name__ == '__main__':
     p.add_argument('--inventory', type=Path, required=True)
     p.add_argument('--out', required=True)
     p.add_argument('--limit', type=int)
+    p.add_argument('--resume', type=Path)
     args = p.parse_args()
-    print(json.dumps(enrich_flood(json.loads(args.inventory.read_text()), args.out, args.limit), indent=2))
+    previous = json.loads(args.resume.read_text()) if args.resume and args.resume.exists() else None
+    print(json.dumps(enrich_flood(json.loads(args.inventory.read_text()), args.out, args.limit, previous), indent=2))
