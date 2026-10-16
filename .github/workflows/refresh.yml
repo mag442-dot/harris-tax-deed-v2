@@ -52,6 +52,9 @@ jobs:
       - name: Enrich every account from official HCAD GIS
         if: steps.clock.outputs.run == 'true'
         run: python enrich.py --inventory state/2026-11-03/latest.json --out state/enrichment
+      - name: Record FEMA parcel intersections or explicit source failures
+        if: steps.clock.outputs.run == 'true'
+        run: python flood.py --inventory state/enrichment/enriched.json --out state/flood
       - name: Build machine-readable report
         if: steps.clock.outputs.run == 'true'
         run: |
@@ -59,7 +62,7 @@ jobs:
           import json
           from pathlib import Path
           from reporting import report_rows
-          doc = json.loads(Path('state/enrichment/enriched.json').read_text())
+          doc = json.loads(Path('state/flood/enriched.json').read_text())
           Path('state/report.json').write_text(json.dumps(report_rows(doc)))
           blocked = sum(r['hcad_gis']['status'] == 'BLOCKED' for r in doc['records'])
           if blocked:
