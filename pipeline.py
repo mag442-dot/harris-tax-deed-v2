@@ -130,8 +130,10 @@ def changes(previous, current):
     for account, row in new.items():
         if account not in old:
             result.append(dict(account=account, kind='NEW'))
-        elif row != old[account]:
-            result.append(dict(account=account, kind='CHANGED', fields=[k for k in row if row[k] != old[account].get(k)]))
+        else:
+            changed_fields = [k for k in row if row[k] != old[account].get(k)]
+            if changed_fields:
+                result.append(dict(account=account, kind='CHANGED', fields=changed_fields))
     for account in old.keys() - new.keys():
         result.append(dict(account=account, kind='MISSING_NEEDS_REVIEW'))
     return sorted(result, key=lambda r: r['account'])
