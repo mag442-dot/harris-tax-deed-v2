@@ -10,6 +10,8 @@ Independent implementation of Harris County auction ingestion and official parce
 - Immutable local source snapshots, audit logs, atomic last-accepted state and sale-specific change history.
 - Batch HCAD parcel GIS enrichment retains official responses, geometries, tax year, area, values, situs address and legal text.
 - CI tests and a separate live-source integration workflow execute outside the chat.
+- Daily acquisition workflow is configured for 8:47 AM America/Chicago through the November 3 sale, with a best-effort cache baseline and 90-day evidence artifacts. This provisional GitHub workflow does not publish daily updates to Google Sheets and is not permanent cloud storage.
+- A verified 182-account report was published through the connected Google Sheets account into the existing workbook's dedicated `V2 Inventory` tab. Existing research tabs were preserved, including historical warnings. The report distinguishes 179 for-sale rows and 3 cancelled rows.
 - Cloud Run entrypoint and image definition use Cloud Storage for durable evidence and conditional state publication. Cloud storage behavior is tested with fake storage objects; real deployment is pending.
 
 ## Latest verified source run
@@ -28,7 +30,7 @@ The local pipeline uses Python 3.12 standard library. Cloud execution additional
 
 ## Remaining work
 
-Real GCP deployment, scheduled execution, Google Sheets staging publication, exemption evidence, flood analysis, comparables, title research and duplex underwriting are not complete. Homestead and flood remain unknown. HCAD appraised or market values are not verified resale comparables. Grouped account membership is not a verified auction-lot identity.
+Real GCP deployment, continuous Sheets synchronization, exemption evidence, validated flood analysis, comparables, title research and duplex underwriting are not complete. A FEMA parcel-intersection module and bounded diagnostic probe are implemented; development requests returned source errors, so no flood clearance is claimed. Homestead and flood remain unknown. HCAD appraised or market values are not verified resale comparables. Grouped account membership is not a verified auction-lot identity.
 
 Target infrastructure: GitHub → Cloud Run Jobs → Cloud Scheduler (America/Chicago) → Cloud Storage → reporting to Google Sheets. Source data and code are separate. No credentials or private exports belong in this public repository.
 
