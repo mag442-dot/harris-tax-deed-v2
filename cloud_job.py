@@ -9,6 +9,7 @@ import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 from enrich import enrich
+from flood import enrich_flood
 from pipeline import SOURCE, fetch, run
 
 
@@ -37,6 +38,9 @@ def execute(bucket, sale_date, not_found, precondition_failed):
             if summary.get('BLOCKED'):
                 raise RuntimeError('GIS batches blocked; refusing latest-state publication')
             enriched = json.loads((root / 'enrichment/enriched.json').read_text())
+            if os.environ.get('ENABLE_FEMA', 'true').lower() == 'true':
+                enrich_flood(enriched, root / 'flood')
+                enriched = json.loads((root / 'flood/enriched.json').read_text())
             for path in root.rglob('*'):
                 if path.is_file() and path.name != 'run.lock' and path.name != 'latest.json':
                     bucket.blob(run_prefix + str(path.relative_to(root))).upload_from_string(
@@ -45,6 +49,14 @@ def execute(bucket, sale_date, not_found, precondition_failed):
             # Concurrent runs cannot overwrite one another's accepted state.
             latest.upload_from_string(json.dumps(enriched), content_type='application/json',
                                       if_generation_match=generation)
+            if os.environ.get('SPREADSHEET_ID'):
+                import google.auth
+                from google.auth.transport.requests import AuthorizedSession
+                from sheets_sync import publish
+                credentials, _ = google.auth.default(scopes=['https://www.googleapis.com/auth/spreadsheets'])
+                receipt = publish(enriched, os.environ['SPREADSHEET_ID'], AuthorizedSession(credentials))
+                bucket.blob(run_prefix + 'sheets_receipt.json').upload_from_string(
+                    json.dumps(receipt), content_type='application/json', if_generation_match=0)
             print(json.dumps(dict(status='PUBLISHED', run=run_id, records=len(inventory['records']),
                                   hcad=summary)))
         except Exception as exc:
