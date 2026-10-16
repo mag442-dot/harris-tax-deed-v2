@@ -3,6 +3,9 @@ on:
   push:
     paths:
       - 'pipeline.py'
+      - 'enrich.py'
+      - 'flood.py'
+      - 'reporting.py'
       - '.github/workflows/live-check.yml'
   workflow_dispatch:
 permissions:
