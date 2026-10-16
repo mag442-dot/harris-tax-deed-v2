@@ -25,6 +25,7 @@ def report_rows(document, warnings=None):
                 flood_text = '/'.join(fema.get('zones', []))
                 flood_text += ' | ' + '; '.join(fema.get('subtypes', []))
                 flood_text += ' | coverage not measured'
+                flood_text += ' | as of ' + str(fema.get('retrieved_at', 'UNKNOWN'))[:10]
             if fema.get('sfha_intersects'):
                 flags.append('FEMA_SFHA_INTERSECTION')
                 if action != 'NO_BID':
