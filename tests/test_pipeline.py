@@ -59,6 +59,14 @@ class PipelineTests(unittest.TestCase):
         self.assertEqual(row['homestead_status'], 'UNKNOWN')
         self.assertEqual(row['flood_status'], 'UNKNOWN')
 
+    def test_missing_address_does_not_borrow_next_property(self):
+        first = fixture().replace('2105 FIRNAT ST, HOUSTON, TX 77093-7209', '')
+        second = fixture(account='0650070000160').replace('FIRNAT', 'OTHER')
+        rows = parse_listing(first + second, '2026-11-03', 1)
+        self.assertIsNone(rows[0]['address'])
+        self.assertEqual(rows[0]['action'], 'HOLD')
+        self.assertIn('OTHER', rows[1]['address'])
+
 
 if __name__ == '__main__':
     unittest.main()
