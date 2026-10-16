@@ -21,6 +21,8 @@ jobs:
           python-version: '3.12'
       - name: Validate live November inventory without publishing to Sheets
         run: python pipeline.py --sale-date 2026-11-03 --state-dir state
+      - name: Enrich all accounts against official parcel GIS
+        run: python enrich.py --inventory state/2026-11-03/latest.json --out state/enrichment
       - uses: actions/upload-artifact@v4
         if: always()
         with:
