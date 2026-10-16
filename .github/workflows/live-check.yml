@@ -11,7 +11,7 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: official-source-check
+  group: harris-official-source
   cancel-in-progress: false
 jobs:
   listing:
