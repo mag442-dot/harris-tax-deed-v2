@@ -4,7 +4,7 @@ import re
 HEADERS = ['Account', 'Sale Date', 'Sale Status', 'Research Action', 'Listing Address',
            'HCAD Address', 'Lot SF', 'Minimum Bid', 'HCAD Market Value', 'Building Value',
            'HCAD Tax Year', 'Sale Type', 'Precinct', 'Cause', 'Grouped', 'Group Target',
-           'Flags', 'Homestead', 'Flood', 'Listing Legal', 'HCAD Legal', 'Historical Warning',
+           'Flags', 'Homestead', 'FEMA Observation', 'Listing Legal', 'HCAD Legal', 'Historical Warning',
            'Listing Source', 'HCAD Source', 'GIS Retrieved UTC', 'State Class', 'FEMA Source']
 
 
@@ -22,7 +22,7 @@ def report_rows(document, warnings=None):
         if fema:
             flood_text = fema['status']
             if fema['status'] == 'INTERSECTION_OBSERVED':
-                flood_text += ': ' + '/'.join(fema.get('zones', []))
+                flood_text = '/'.join(fema.get('zones', []))
                 flood_text += ' | ' + '; '.join(fema.get('subtypes', []))
                 flood_text += ' | coverage not measured'
             if fema.get('sfha_intersects'):
@@ -92,6 +92,8 @@ def publication_requests(document, sheet_id, title, warnings=None, create=True):
              'startIndex': 4, 'endIndex': 6}, 'properties': {'pixelSize': 320}, 'fields': 'pixelSize'}},
         {'updateDimensionProperties': {'range': {'sheetId': sheet_id, 'dimension': 'COLUMNS',
              'startIndex': 19, 'endIndex': 25}, 'properties': {'pixelSize': 320}, 'fields': 'pixelSize'}},
+        {'updateDimensionProperties': {'range': {'sheetId': sheet_id, 'dimension': 'COLUMNS',
+             'startIndex': 18, 'endIndex': 19}, 'properties': {'pixelSize': 420}, 'fields': 'pixelSize'}},
         {'repeatCell': {'range': dict(area, startRowIndex=1, startColumnIndex=7, endColumnIndex=10),
              'cell': {'userEnteredFormat': {'numberFormat': {'type': 'CURRENCY', 'pattern': '$#,##0.00'}}},
              'fields': 'userEnteredFormat.numberFormat'}},
