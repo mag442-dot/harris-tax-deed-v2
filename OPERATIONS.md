@@ -1,6 +1,6 @@
 # Implemented baseline
 
-`python -m unittest discover -s tests -v` runs 14 offline regression checks.
+`python -m unittest discover -s tests -v` runs 21 offline regression checks.
 
 `python pipeline.py --sale-date 2026-11-03 --state-dir state` fetches the official listing, validates the source sale date and auction identifiers, and saves raw snapshots, audit records, account records and changes.
 
@@ -26,7 +26,17 @@ The source integration workflow runs independently in GitHub Actions when the pi
 - Configure cloud identity, permissions, billing, monitoring and scheduler, then execute and inspect a real job. No GCP credentials or cloud tooling have been configured in this environment.
 - Add a controlled reporting layer that never overwrites manual title warnings or historical research.
 
-There are no bid recommendations, title clearances, market valuations or duplex feasibility conclusions in this baseline.
+There are no bid recommendations, title clearances, market valuations or duplex feasibility conclusions in this baseline. Reporting labels Baytown and fractional interests NO_BID, preserves historical warnings, and keeps cancelled records visible as unavailable.
+
+## Provisional unattended execution
+
+`.github/workflows/refresh.yml` runs the listing and HCAD pipeline daily at 8:47 AM Houston. Two UTC cron triggers plus a daylight-saving selector choose one daily run; GitHub schedules can be delayed. The sale date is explicitly November 3, 2026 and execution stops after that local date. Update configuration and validate the next source before using it for another sale.
+
+The prior accepted listing is restored from GitHub Actions cache when available. Cache can be evicted; a missing baseline produces NEW records rather than inferred cancellations. Each run uploads source and enrichment evidence for 90 days. This is provisional retention, not the permanent GCS data store. Workflow artifacts do not include private manual historical notes, and the daily workflow does not refresh Sheets.
+
+The existing Google workbook now contains a separate V2 Inventory report with 182 unique accounts, 179 for-sale records and three cancellations. This initial publication used the connected account and retained 44 account-specific historical warnings. It did not change Master formulas or historical tabs. Native value and formatting readback succeeded; browser rendering was unavailable.
+
+`flood.py` queries FEMA using full parcel rings in EPSG:4326, records the intersecting hazard zones, and never interprets a missing response as safe. It does not calculate coverage percentages or prove that the whole parcel is mapped. Three consecutive source failures open a circuit rather than sending requests for the remaining accounts. Live FEMA validation remains separate from successful listing/HCAD checks.
 
 ## Deployment access blocker
 
