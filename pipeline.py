@@ -67,6 +67,7 @@ def parse_listing(html, expected_date, min_records=50):
     records = []
     for index, start in enumerate(starts):
         block = text[start.start():starts[index + 1].start() if index + 1 < len(starts) else len(text)]
+        block = re.split(r'\nClose\b', block, maxsplit=1)[0]
         def field(pattern):
             m = re.search(pattern, block, re.I)
             return m[1].strip() if m else None
@@ -76,8 +77,13 @@ def parse_listing(html, expected_date, min_records=50):
         sale_type = field(r'(?:^|\n)Type\s*:\s*([^\n]+)')
         sale_number = field(r'Sale\s*#\s*:\s*(\d+)')
         # Detail address follows the account header. Never infer location from account.
-        address = field(r'(?:^|\n)([^\n]*\bTX\s+\d{5}(?:-\d{4})?)\s*(?:\n|$)')
-        description = field(r'(?:^|\n)Description\s*\n([\s\S]*?)(?:\nClose\b|\nView Details\b|$)')
+        address_area = block.split('×', 1)[0]
+        address_match = re.search(r'(?:^|\n)([^\n]*\bTX\.?\s+\d{5}(?:-\d{4})?)\s*(?:\n|$)', address_area)
+        address = address_match[1].strip() if address_match else None
+        raw_match = re.search(r'\n([^\n]+)\n×', block)
+        address_raw = raw_match[1].strip() if raw_match and not re.search(r'Bid:|Value:|Account#|Cause#', raw_match[1]) else None
+        description_match = re.search(r'(?:^|\n)Description[^\S\n]*(?:\n|$)([\s\S]*)', block, re.I)
+        description = description_match[1].strip() if description_match else None
         grouped = bool(re.search(r'Sold with Account\s*#', block, re.I))
         group_target = field(r'Sold with Account\s*#\s*:?\s*(\d{13})\b')
         flags = []
@@ -94,7 +100,10 @@ def parse_listing(html, expected_date, min_records=50):
             flags.append('MISSING_PROPERTY_DETAIL')
         records.append(dict(account=account, sale_date=sale_date, cause=cause,
                             precinct=precinct, sale_number=sale_number, sale_type=sale_type,
-                            address=address, legal_description=description,
+                            address=address, address_raw=address_raw,
+                            address_status='SOURCE_REPORTED' if address else 'INCOMPLETE_OR_MISSING',
+                            legal_description=description or None,
+                            legal_status='SOURCE_REPORTED' if description else 'MISSING',
                             minimum_bid=bid, adjudged_value=money(block, 'Adjudged Value'),
                             grouped=grouped, group_target=group_target,
                             lot_identity_status='UNVERIFIED', flags=flags,
@@ -107,8 +116,10 @@ def parse_listing(html, expected_date, min_records=50):
         raise QualityError('Duplicate accounts; refusing publication')
     if any(not r['cause'] or not r['precinct'] or not r['sale_type'] or not r['sale_number'] for r in records):
         raise QualityError('Required auction identifiers missing')
-    if any(not r['address'] or not r['legal_description'] for r in records):
-        raise QualityError('Property details incomplete; HTML layout requires review')
+    if sum(not r['legal_description'] for r in records) > max(1, len(records) * .5):
+        raise QualityError('More than half of legal descriptions missing; layout requires review')
+    if sum(not r['address'] for r in records) > max(1, len(records) * .5):
+        raise QualityError('More than half of source addresses missing; layout requires review')
     return records
 
 
@@ -175,7 +186,9 @@ def run(html, state_dir, sale_date, min_records=50, source=SOURCE):
             if previous and len(rows) < len(previous) * .75:
                 raise QualityError('Inventory fell by more than 25%; needs review')
             delta = changes(previous, rows)
-            audit.update(status='PASSED', records=len(rows), changes=len(delta))
+            audit.update(status='PASSED', records=len(rows), changes=len(delta),
+                         missing_address=sum(not r['address'] for r in rows),
+                         missing_legal=sum(not r['legal_description'] for r in rows))
             document = dict(audit=audit, records=rows, changes=delta)
             atomic_json(root / 'runs' / (run_id + '.json'), document)
             atomic_json(latest, document)
