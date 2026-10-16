@@ -10,7 +10,7 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: november-inventory-refresh
+  group: harris-official-source
   cancel-in-progress: false
 env:
   SALE_DATE: '2026-11-03'
@@ -43,7 +43,9 @@ jobs:
       - uses: actions/cache/restore@v4
         if: steps.clock.outputs.run == 'true'
         with:
-          path: state/2026-11-03/latest.json
+          path: |
+            state/2026-11-03/latest.json
+            state/flood/enriched.json
           key: november-v2-${{ github.run_id }}-${{ github.run_attempt }}
           restore-keys: november-v2-
       - name: Fetch and validate official listing
@@ -54,7 +56,7 @@ jobs:
         run: python enrich.py --inventory state/2026-11-03/latest.json --out state/enrichment
       - name: Record FEMA parcel intersections or explicit source failures
         if: steps.clock.outputs.run == 'true'
-        run: python flood.py --inventory state/enrichment/enriched.json --out state/flood
+        run: python flood.py --inventory state/enrichment/enriched.json --out state/flood --resume state/flood/enriched.json
       - name: Build machine-readable report
         if: steps.clock.outputs.run == 'true'
         run: |
@@ -71,7 +73,9 @@ jobs:
       - uses: actions/cache/save@v4
         if: success() && steps.clock.outputs.run == 'true'
         with:
-          path: state/2026-11-03/latest.json
+          path: |
+            state/2026-11-03/latest.json
+            state/flood/enriched.json
           key: november-v2-${{ github.run_id }}-${{ github.run_attempt }}
       - uses: actions/upload-artifact@v4
         if: always() && steps.clock.outputs.run == 'true'
