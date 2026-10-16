@@ -41,6 +41,10 @@ class PipelineTests(unittest.TestCase):
         self.assertEqual(changes([{'account': '001'}], []),
                          [{'account': '001', 'kind': 'MISSING_NEEDS_REVIEW'}])
 
+    def test_enrichment_does_not_create_false_listing_changes(self):
+        self.assertEqual(changes([{'account': '001', 'hcad_gis': {'status': 'SOURCE_REPORTED'}}],
+                                 [{'account': '001'}]), [])
+
     def test_failure_preserves_latest_and_records_audit(self):
         with tempfile.TemporaryDirectory() as directory:
             first = run(fixture(), directory, '2026-11-03', 1)
