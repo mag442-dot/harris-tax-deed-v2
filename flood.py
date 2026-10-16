@@ -2,6 +2,8 @@
 import argparse
 import json
 import urllib.request
+import urllib.error
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import urlencode
@@ -22,8 +24,18 @@ def query(geometry):
                             outFields='FLD_ZONE,ZONE_SUBTY,SFHA_TF,DFIRM_ID,FLD_AR_ID')).encode()
     request = urllib.request.Request(LAYER + '/query', data=payload,
                                      headers={'User-Agent': 'HarrisAuctionResearch/0.1'})
-    with urllib.request.urlopen(request, timeout=30) as response:
-        data = json.load(response)
+    for attempt in range(2):
+        try:
+            with urllib.request.urlopen(request, timeout=30) as response:
+                data = json.load(response)
+            break
+        except urllib.error.HTTPError as exc:
+            if exc.code not in (429, 500, 502, 503, 504) or attempt == 1:
+                raise
+        except (urllib.error.URLError, TimeoutError, OSError):
+            if attempt == 1:
+                raise
+        time.sleep(2)
     if data.get('error') or data.get('exceededTransferLimit'):
         raise ValueError('FEMA error or truncated response: ' + str(data.get('error', 'limit')))
     if 'features' not in data:
@@ -62,6 +74,7 @@ def enrich_flood(document, directory, limit=None):
             observation.update(status='BLOCKED_CIRCUIT_OPEN')
         else:
             queried += 1
+            time.sleep(.3)
             try:
                 raw = query(geometry)
                 atomic_json(root / 'raw' / (row['account'] + '.json'), dict(observation, response=raw))
