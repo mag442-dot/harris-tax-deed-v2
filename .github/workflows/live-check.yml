@@ -3,12 +3,15 @@ on:
   push:
     paths:
       - 'pipeline.py'
+      - 'enrich.py'
+      - 'flood.py'
+      - 'reporting.py'
       - '.github/workflows/live-check.yml'
   workflow_dispatch:
 permissions:
   contents: read
 concurrency:
-  group: official-source-check
+  group: harris-official-source
   cancel-in-progress: false
 jobs:
   listing:
@@ -23,6 +26,8 @@ jobs:
         run: python pipeline.py --sale-date 2026-11-03 --state-dir state
       - name: Enrich all accounts against official parcel GIS
         run: python enrich.py --inventory state/2026-11-03/latest.json --out state/enrichment
+      - name: Query FEMA for every available parcel geometry and retain source errors
+        run: python flood.py --inventory state/enrichment/enriched.json --out state/flood
       - uses: actions/upload-artifact@v4
         if: always()
         with:

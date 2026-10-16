@@ -84,9 +84,15 @@ def parse_listing(html, expected_date, min_records=50):
         address_raw = raw_match[1].strip() if raw_match and not re.search(r'Bid:|Value:|Account#|Cause#', raw_match[1]) else None
         description_match = re.search(r'(?:^|\n)Description[^\S\n]*(?:\n|$)([\s\S]*)', block, re.I)
         description = description_match[1].strip() if description_match else None
+        status_match = re.search(r'(?:^|\n)(For Sale|Cancelled|Canceled|Withdrawn|Sold)(?:\n|$)', block, re.I)
+        sale_status = status_match[1].upper() if status_match else 'UNKNOWN'
         grouped = bool(re.search(r'Sold with Account\s*#', block, re.I))
         group_target = field(r'Sold with Account\s*#\s*:?\s*(\d{13})\b')
         flags = []
+        if sale_status in ('CANCELLED', 'CANCELED', 'WITHDRAWN', 'SOLD'):
+            flags.append('NOT_AVAILABLE')
+        elif sale_status == 'UNKNOWN':
+            flags.append('UNKNOWN_SALE_STATUS')
         if grouped:
             flags.append('GROUP_REVIEW')
         if re.search(r'undivided|fractional|\bpercent interest\b|\b\d+/\d+\b.*interest', description or '', re.I):
@@ -100,6 +106,7 @@ def parse_listing(html, expected_date, min_records=50):
             flags.append('MISSING_PROPERTY_DETAIL')
         records.append(dict(account=account, sale_date=sale_date, cause=cause,
                             precinct=precinct, sale_number=sale_number, sale_type=sale_type,
+                            sale_status=sale_status,
                             address=address, address_raw=address_raw,
                             address_status='SOURCE_REPORTED' if address else 'INCOMPLETE_OR_MISSING',
                             legal_description=description or None,
@@ -107,7 +114,7 @@ def parse_listing(html, expected_date, min_records=50):
                             minimum_bid=bid, adjudged_value=money(block, 'Adjudged Value'),
                             grouped=grouped, group_target=group_target,
                             lot_identity_status='UNVERIFIED', flags=flags,
-                            action='HOLD' if flags else 'RESEARCH',
+                            action='NO_BID' if 'NOT_AVAILABLE' in flags else ('HOLD' if flags else 'RESEARCH'),
                             homestead_status='UNKNOWN', flood_status='UNKNOWN'))
     accounts = [r['account'] for r in records]
     if len(records) < min_records:

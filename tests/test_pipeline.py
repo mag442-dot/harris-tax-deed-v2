@@ -12,7 +12,7 @@ def fixture(account='0650070000133', bid=True, description='An undivided one-fou
     <h4>2105 FIRNAT ST, HOUSTON, TX 77093-7209</h4>
     <table><tr><td>Precinct:</td><td>Precinct 1</td></tr>
     <tr><td>Sale#:</td><td>1</td></tr><tr><td>Type:</td><td>SALE</td></tr></table>
-    <h4>Description</h4><p>{description}</p><button>Close</button>'''
+    <div>For Sale</div><h4>Description</h4><p>{description}</p><button>Close</button>'''
 
 
 class PipelineTests(unittest.TestCase):
@@ -62,6 +62,11 @@ class PipelineTests(unittest.TestCase):
         self.assertEqual(row['action'], 'RESEARCH')
         self.assertEqual(row['homestead_status'], 'UNKNOWN')
         self.assertEqual(row['flood_status'], 'UNKNOWN')
+
+    def test_cancelled_is_no_bid_even_if_bid_present(self):
+        row = parse_listing(fixture().replace('For Sale', 'Cancelled'), '2026-11-03', 1)[0]
+        self.assertEqual(row['sale_status'], 'CANCELLED')
+        self.assertEqual(row['action'], 'NO_BID')
 
     def test_missing_address_does_not_borrow_next_property(self):
         first = fixture().replace('2105 FIRNAT ST, HOUSTON, TX 77093-7209', '')

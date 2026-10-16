@@ -10,6 +10,8 @@ Independent implementation of Harris County auction ingestion and official parce
 - Immutable local source snapshots, audit logs, atomic last-accepted state and sale-specific change history.
 - Batch HCAD parcel GIS enrichment retains official responses, geometries, tax year, area, values, situs address and legal text.
 - CI tests and a separate live-source integration workflow execute outside the chat.
+- Daily acquisition workflow is configured for 8:47 AM America/Chicago through the November 3 sale, with a best-effort cache baseline and 90-day evidence artifacts. It refreshes listing, HCAD and FEMA observations or explicit source errors. This provisional GitHub workflow does not publish daily updates to Google Sheets and is not permanent cloud storage.
+- A verified 182-account report was published through the connected Google Sheets account into the existing workbook's dedicated `V2 Inventory` tab. Existing research tabs were preserved, including historical warnings. The report distinguishes 179 for-sale rows and 3 cancelled rows.
 - Cloud Run entrypoint and image definition use Cloud Storage for durable evidence and conditional state publication. Cloud storage behavior is tested with fake storage objects; real deployment is pending.
 
 ## Latest verified source run
@@ -28,7 +30,9 @@ The local pipeline uses Python 3.12 standard library. Cloud execution additional
 
 ## Remaining work
 
-Real GCP deployment, scheduled execution, Google Sheets staging publication, exemption evidence, flood analysis, comparables, title research and duplex underwriting are not complete. Homestead and flood remain unknown. HCAD appraised or market values are not verified resale comparables. Grouped account membership is not a verified auction-lot identity.
+Real GCP deployment, continuous Sheets synchronization, exemption evidence, complete flood analysis, comparables, title research and duplex underwriting are not complete. FEMA intersections work from GitHub but can have partial source coverage or connection failures; results distinguish observed zones from unknown coverage and do not provide flood clearance. Homestead remains unknown. HCAD appraised or market values are not verified resale comparables. Grouped account membership is not a verified auction-lot identity.
+
+`sheets_sync.py` implements authenticated staging publication with a schema gate, historical-warning retrieval and account readback. The optional Cloud Run `SPREADSHEET_ID` setting enables it only after the runtime identity has editor access to the target file. This credentialed runtime path has not been executed; the initial Sheet publication used the connected account.
 
 Target infrastructure: GitHub → Cloud Run Jobs → Cloud Scheduler (America/Chicago) → Cloud Storage → reporting to Google Sheets. Source data and code are separate. No credentials or private exports belong in this public repository.
 
