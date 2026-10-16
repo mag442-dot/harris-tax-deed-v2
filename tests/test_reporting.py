@@ -25,3 +25,10 @@ class ReportingTests(unittest.TestCase):
         self.assertEqual(values[0]['userEnteredValue'], {'stringValue': '0010000000001'})
         self.assertEqual(values[4]['userEnteredValue'], {'stringValue': '=1+1'})
         self.assertEqual(req['range']['endColumnIndex'], len(values))
+
+    def test_fema_intersection_requires_review_without_claiming_coverage(self):
+        rows = report_rows(document(fema={'status': 'INTERSECTION_OBSERVED', 'zones': ['AE'],
+                                          'sfha_intersects': True, 'source': 'https://example.test/fema'}))
+        self.assertEqual(rows[1][3], 'HOLD')
+        self.assertIn('coverage not measured', rows[1][18])
+        self.assertEqual(rows[1][-1], 'https://example.test/fema')
