@@ -11,3 +11,7 @@ jobs:
         with:
           python-version: '3.12'
       - run: python -m unittest discover -s tests -v
+      - name: Verify cloud SDK dependency and imports
+        run: |
+          pip install -r requirements.txt
+          python -c 'from google.cloud import storage; import cloud_job'
