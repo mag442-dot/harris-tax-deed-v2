@@ -1,5 +1,8 @@
 name: Official Harris December auction acquisition
 on:
+  push:
+    paths:
+      - '.github/workflows/live-check.yml'
   workflow_dispatch:
   schedule:
     - cron: '47 14 * * *'
