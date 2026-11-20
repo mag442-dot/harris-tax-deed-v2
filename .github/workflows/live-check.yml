@@ -1,37 +1,33 @@
-name: Official source integration check
+name: Official Harris December auction acquisition
 on:
-  push:
-    paths:
-      - 'pipeline.py'
-      - 'enrich.py'
-      - 'flood.py'
-      - 'reporting.py'
-      - '.github/workflows/live-check.yml'
   workflow_dispatch:
+  schedule:
+    - cron: '47 14 * * *'
 permissions:
   contents: read
 concurrency:
-  group: harris-official-source
+  group: harris-dec2026-official-source
   cancel-in-progress: false
 jobs:
   listing:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Validate live November inventory without publishing to Sheets
-        run: python pipeline.py --sale-date 2026-11-03 --state-dir state
-      - name: Enrich all accounts against official parcel GIS
-        run: python enrich.py --inventory state/2026-11-03/latest.json --out state/enrichment
-      - name: Query FEMA for every available parcel geometry and retain source errors
+      - name: Run official December inventory ingestion
+        run: python pipeline.py --sale-date 2026-12-01 --state-dir state
+      - name: Enrich all December accounts against official parcel GIS
+        run: python enrich.py --inventory state/2026-12-01/latest.json --out state/enrichment
+      - name: Query FEMA and retain unknown/error evidence
         run: python flood.py --inventory state/enrichment/enriched.json --out state/flood
-      - uses: actions/upload-artifact@v4
+      - name: Preserve complete evidence, including failures
+        uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: official-source-evidence
+          name: harris-dec2026-official-evidence
           path: state/
-          retention-days: 14
+          retention-days: 90
           if-no-files-found: warn
