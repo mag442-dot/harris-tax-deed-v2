@@ -39,3 +39,20 @@ Target infrastructure: GitHub → Cloud Run Jobs → Cloud Scheduler (America/Ch
 Investment scope favors vacant land in northern Houston toward The Woodlands; excludes Baytown and confirmed homestead; has no fixed acquisition price cap. Incomplete legal or physical evidence blocks bid recommendations.
 
 See OPERATIONS.md for verification evidence and deployment limitations.
+
+## December 1, 2026 pipeline
+
+The December workflow uses the official listing, HCAD batches and FEMA parcel
+intersections, then runs A1-A10 and retains source and decision artifacts. The
+November workflow has its own date, cache and publication path.
+
+```bash
+python -m unittest discover -s tests -v
+python pipeline.py --sale-date 2026-12-01 --state-dir state
+python enrich.py --inventory state/2026-12-01/latest.json --out state/enrichment
+python flood.py --inventory state/enrichment/enriched.json --out state/flood --resume state/flood/enriched.json
+python diligence.py --inventory state/flood/enriched.json --out state/diligence
+```
+
+See [December operations and evidence](DECEMBER.md) for input contracts,
+integration measurements, and sources that still require evidence.

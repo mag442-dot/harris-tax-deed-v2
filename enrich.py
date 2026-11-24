@@ -35,6 +35,8 @@ def summarize(features):
                 address=', '.join(x for x in (street, a.get('site_city'), a.get('site_zip')) if x),
                 lot_sf=a.get('land_sqft'), market_value=a.get('total_market_val'),
                 appraised_value=a.get('total_appraised_val'), building_value=a.get('bld_value'),
+                city=a.get('site_city'), zip=a.get('site_zip'),
+                improvement_value=a.get('impr_value'),
                 state_class=a.get('state_class'), land_use=a.get('land_use'),
                 legal_description=' '.join(a.get('legal_dscr_' + str(i)) or '' for i in range(1, 5)).strip(),
                 clerk_id=a.get('clerk_id'), homestead_status='UNKNOWN',
@@ -48,14 +50,20 @@ def enrich(document, directory):
     for offset in range(0, len(rows), 25):
         batch = [r['account'] for r in rows[offset:offset + 25]]
         now = datetime.now(timezone.utc).isoformat()
+        raw_path = root / 'gis_raw' / (str(offset) + '.json')
         try:
             url, raw = query(batch)
-            atomic_json(root / 'gis_raw' / (str(offset) + '.json'), dict(source=url, retrieved_at=now, response=raw))
+            atomic_json(raw_path, dict(source=url, retrieved_at=now, response=raw))
             grouped = defaultdict(list)
             for feature in raw.get('features', []):
                 grouped[str(feature['attributes'].get('acct_num'))].append(feature)
             for account in batch:
-                results[account] = dict(summarize(grouped[account]), source=url, retrieved_at=now)
+                try:
+                    parcel = summarize(grouped[account])
+                except (KeyError, TypeError, ValueError) as exc:
+                    parcel = dict(status='BLOCKED', error=str(exc), homestead_status='UNKNOWN')
+                results[account] = dict(parcel, source=url, retrieved_at=now,
+                                        raw_evidence=raw_path.relative_to(root).as_posix())
         except Exception as exc:
             for account in batch:
                 results[account] = dict(status='BLOCKED', error=str(exc), source=LAYER,
@@ -73,4 +81,4 @@ if __name__ == '__main__':
     p.add_argument('--inventory', type=Path, required=True)
     p.add_argument('--out', required=True)
     args = p.parse_args()
-    print(json.dumps(enrich(json.loads(args.inventory.read_text()), args.out), indent=2))
+    print(json.dumps(enrich(json.loads(args.inventory.read_text(encoding='utf-8')), args.out), indent=2))
