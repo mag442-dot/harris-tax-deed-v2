@@ -111,5 +111,5 @@ if __name__ == '__main__':
     p.add_argument('--limit', type=int)
     p.add_argument('--resume', type=Path)
     args = p.parse_args()
-    previous = json.loads(args.resume.read_text()) if args.resume and args.resume.exists() else None
-    print(json.dumps(enrich_flood(json.loads(args.inventory.read_text()), args.out, args.limit, previous), indent=2))
+    previous = json.loads(args.resume.read_text(encoding='utf-8')) if args.resume and args.resume.exists() else None
+    print(json.dumps(enrich_flood(json.loads(args.inventory.read_text(encoding='utf-8')), args.out, args.limit, previous), indent=2))

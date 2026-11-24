@@ -9,6 +9,7 @@ import tempfile
 import time
 import urllib.error
 import urllib.request
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from decimal import Decimal
 from html.parser import HTMLParser
@@ -100,6 +101,8 @@ def parse_listing(html, expected_date, min_records=50):
         if (sale_type or '').upper() not in ('SALE', 'RESALE'):
             flags.append('SPECIAL_PROCEEDING')
         bid = money(block, 'Minimum Bid')
+        judgment = field(r'(?:^|\n)Judgment\s*:\s*(\d{2}/\d{2}/\d{4})\b')
+        years = field(r'(?:^|\n)Tax Years in Judg[e]?ment\s*:\s*(\d{4}\s*-\s*\d{4}|\d{4})\b')
         if bid is None and not grouped:
             flags.append('MISSING_BID')
         if not address or not description:
@@ -112,6 +115,7 @@ def parse_listing(html, expected_date, min_records=50):
                             legal_description=description or None,
                             legal_status='SOURCE_REPORTED' if description else 'MISSING',
                             minimum_bid=bid, adjudged_value=money(block, 'Adjudged Value'),
+                            judgment_date=judgment, judgment_tax_years=years,
                             grouped=grouped, group_target=group_target,
                             lot_identity_status='UNVERIFIED', flags=flags,
                             action='NO_BID' if 'NOT_AVAILABLE' in flags else ('HOLD' if flags else 'RESEARCH'),
@@ -165,7 +169,7 @@ def atomic_json(path, data):
     path.parent.mkdir(parents=True, exist_ok=True)
     fd, name = tempfile.mkstemp(dir=path.parent)
     try:
-        with os.fdopen(fd, 'w') as stream:
+        with os.fdopen(fd, 'w', encoding='utf-8') as stream:
             json.dump(data, stream, indent=2, ensure_ascii=False)
         os.replace(name, path)
     finally:
@@ -173,32 +177,47 @@ def atomic_json(path, data):
             os.unlink(name)
 
 
+@contextmanager
+def inventory_lock(path):
+    with path.open('a+b') as lock:
+        if os.name == 'nt':
+            import msvcrt
+            lock.seek(0)
+            msvcrt.locking(lock.fileno(), msvcrt.LK_LOCK, 1)
+        else:
+            import fcntl
+            fcntl.flock(lock, fcntl.LOCK_EX)
+        yield
+
+
 def run(html, state_dir, sale_date, min_records=50, source=SOURCE):
     root = Path(state_dir)
     root.mkdir(parents=True, exist_ok=True)
     # Exclusive local lock prevents concurrent pointer replacement.
-    import fcntl
-    with (root / 'run.lock').open('w') as lock:
-        fcntl.flock(lock, fcntl.LOCK_EX)
+    with inventory_lock(root / 'run.lock'):
         digest = hashlib.sha256(html.encode()).hexdigest()
         snapshot = root / 'snapshots' / (digest + '.html')
         snapshot.parent.mkdir(exist_ok=True)
         if not snapshot.exists():
-            snapshot.write_text(html)
+            snapshot.write_bytes(html.encode('utf-8'))
         now = datetime.now(timezone.utc).isoformat()
         run_id = datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S%fZ')
         audit = dict(run_id=run_id, retrieved_at=now, source=source, sha256=digest, sale_date=sale_date)
         try:
             rows = parse_listing(html, sale_date, min_records)
             latest = root / sale_date / 'latest.json'
-            previous = json.loads(latest.read_text())['records'] if latest.exists() else []
+            baseline = json.loads(latest.read_text(encoding='utf-8')) if latest.exists() else {}
+            previous = baseline.get('records', [])
             if previous and len(rows) < len(previous) * .75:
                 raise QualityError('Inventory fell by more than 25%; needs review')
             delta = changes(previous, rows)
             audit.update(status='PASSED', records=len(rows), changes=len(delta),
                          missing_address=sum(not r['address'] for r in rows),
                          missing_legal=sum(not r['legal_description'] for r in rows))
-            document = dict(audit=audit, records=rows, changes=delta)
+            missing = set(baseline.get('unresolved_missing', []))
+            missing.update(item['account'] for item in delta if item['kind'] == 'MISSING_NEEDS_REVIEW')
+            missing.difference_update(row['account'] for row in rows)
+            document = dict(audit=audit, records=rows, changes=delta, unresolved_missing=sorted(missing))
             atomic_json(root / 'runs' / (run_id + '.json'), document)
             atomic_json(latest, document)
             return document

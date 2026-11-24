@@ -8,12 +8,16 @@ import os
 import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
+from diligence import SALE_DATE, SPREADSHEET_ID, process
 from enrich import enrich
 from flood import enrich_flood
-from pipeline import SOURCE, fetch, run
+from pipeline import SOURCE, atomic_json, fetch, run
 
 
 def execute(bucket, sale_date, not_found, precondition_failed):
+    spreadsheet_id = os.environ.get('SPREADSHEET_ID')
+    if spreadsheet_id and (sale_date == SALE_DATE) != (spreadsheet_id == SPREADSHEET_ID):
+        raise ValueError('December sale and workbook must be paired')
     prefix = 'sales/' + sale_date + '/'
     latest = bucket.blob(prefix + 'latest.json')
     try:
@@ -30,20 +34,26 @@ def execute(bucket, sale_date, not_found, precondition_failed):
         if previous:
             path = root / sale_date / 'latest.json'
             path.parent.mkdir(parents=True)
-            path.write_text(previous)
+            path.write_text(previous, encoding='utf-8')
         try:
             html = fetch(SOURCE)
             inventory = run(html, root, sale_date)
             summary = enrich(inventory, root / 'enrichment')
-            if summary.get('BLOCKED'):
+            if sale_date != SALE_DATE and summary.get('BLOCKED'):
                 raise RuntimeError('GIS batches blocked; refusing latest-state publication')
-            enriched = json.loads((root / 'enrichment/enriched.json').read_text())
+            enriched = json.loads((root / 'enrichment/enriched.json').read_text(encoding='utf-8'))
             if os.environ.get('ENABLE_FEMA', 'true').lower() == 'true':
                 enrich_flood(enriched, root / 'flood', previous=json.loads(previous) if previous else None)
-                enriched = json.loads((root / 'flood/enriched.json').read_text())
+                enriched = json.loads((root / 'flood/enriched.json').read_text(encoding='utf-8'))
+            if sale_date == SALE_DATE:
+                evidence = None
+                if os.environ.get('DILIGENCE_EVIDENCE_OBJECT'):
+                    evidence = json.loads(bucket.blob(os.environ['DILIGENCE_EVIDENCE_OBJECT']).download_as_text())
+                enriched = process(enriched, root / 'diligence/checkpoints', evidence)
+                atomic_json(root / 'diligence/results.json', enriched)
             for path in root.rglob('*'):
                 if path.is_file() and path.name != 'run.lock' and path.name != 'latest.json':
-                    bucket.blob(run_prefix + str(path.relative_to(root))).upload_from_string(
+                    bucket.blob(run_prefix + path.relative_to(root).as_posix()).upload_from_string(
                         path.read_bytes(), if_generation_match=0)
             # Snapshot and full run are durable before the accepted pointer changes.
             # Concurrent runs cannot overwrite one another's accepted state.
@@ -52,9 +62,15 @@ def execute(bucket, sale_date, not_found, precondition_failed):
             if os.environ.get('SPREADSHEET_ID'):
                 import google.auth
                 from google.auth.transport.requests import AuthorizedSession
-                from sheets_sync import publish
                 credentials, _ = google.auth.default(scopes=['https://www.googleapis.com/auth/spreadsheets'])
-                receipt = publish(enriched, os.environ['SPREADSHEET_ID'], AuthorizedSession(credentials))
+                session = AuthorizedSession(credentials)
+                spreadsheet_id = os.environ['SPREADSHEET_ID']
+                if sale_date == SALE_DATE:
+                    from diligence_sheet import publish
+                    receipt = publish(enriched, session, spreadsheet_id)
+                else:
+                    from sheets_sync import publish
+                    receipt = publish(enriched, spreadsheet_id, session)
                 bucket.blob(run_prefix + 'sheets_receipt.json').upload_from_string(
                     json.dumps(receipt), content_type='application/json', if_generation_match=0)
             print(json.dumps(dict(status='PUBLISHED', run=run_id, records=len(inventory['records']),
@@ -65,7 +81,7 @@ def execute(bucket, sale_date, not_found, precondition_failed):
                 if not path.is_file() or path.name in ('run.lock', 'latest.json'):
                     continue
                 try:
-                    bucket.blob(run_prefix + 'failed-evidence/' + str(path.relative_to(root))).upload_from_string(
+                    bucket.blob(run_prefix + 'failed-evidence/' + path.relative_to(root).as_posix()).upload_from_string(
                         path.read_bytes(), if_generation_match=0)
                 except precondition_failed:
                     pass
