@@ -16,7 +16,7 @@ SALE_DATE = '2026-12-01'
 SPREADSHEET_ID = '1UgtW_0Qeg8aYa0hlRbfGVrR5_-Jlf4Lvz8YhMmw1iOg'
 REFERENCE_COUNT = 157
 ZIP_PRIORITY = ('77028', '77021', '77078', '77033', '77051', '77016', '77088')
-VERSION = 3
+VERSION = 4
 UNKNOWN = 'UNKNOWN'
 
 
@@ -112,7 +112,11 @@ def a2(row, bundle):
     gis = row.get('hcad_gis', {})
     proof = evidence_for(bundle, 'hcad', row['account'])
     reviewed = proof['data'] if proof else {}
-    homestead = reviewed.get('homestead')
+    exemption = row.get('hcad_exemption') or {}
+    recorded_home = exemption.get('homestead')
+    reviewed_home = reviewed.get('homestead')
+    conflict = type(recorded_home) is bool and type(reviewed_home) is bool and recorded_home != reviewed_home
+    homestead = recorded_home if type(recorded_home) is bool else reviewed_home
     vacant = reviewed.get('vacant')
     city = gis.get('city')
     zipcode = str(gis.get('zip') or '')
@@ -123,13 +127,13 @@ def a2(row, bundle):
     known = (gis.get('status') == 'SOURCE_REPORTED' and bool(gis.get('source')) and
              amount(gis.get('lot_sf')) is not None and bool(city) and zipcode.isdigit() and
              bool(gis.get('state_class')) and amount(gis.get('building_value')) is not None and
-             type(homestead) is bool and type(vacant) is bool and
+             type(homestead) is bool and not conflict and type(vacant) is bool and
              not (vacant and amount(gis.get('building_value'))))
     return status(known, dict(lot_sf=gis.get('lot_sf'), city=city, zip=zipcode,
                               state_class=gis.get('state_class'), building_value=gis.get('building_value'),
                               improvement_value=gis.get('improvement_value'),
-                              homestead=homestead, vacant=vacant),
-                  dict(gis=gis, review=proof))
+                              homestead=homestead, vacant=vacant, homestead_conflict=conflict),
+                  dict(gis=gis, exemption=exemption, review=proof))
 
 
 def a5(row, bundle):
@@ -198,6 +202,8 @@ def audit(row, modules, inventory):
     location = ' '.join(str(value or '') for value in (row.get('address'), row.get('address_raw'), parcel['city']))
     if re.search(r'\bBAYTOWN\b', location, re.I):
         exclusions.append('BAYTOWN')
+    if parcel['homestead_conflict']:
+        issues.append('CONFLICTING_HOMESTEAD_EVIDENCE')
     if parcel['homestead'] is True:
         exclusions.append('HOMESTEAD')
     if parcel['vacant'] is False:
@@ -342,11 +348,15 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--inventory', type=Path, required=True)
     parser.add_argument('--evidence', type=Path)
+    parser.add_argument('--hcad-exemptions', type=Path)
     parser.add_argument('--out', type=Path, required=True)
     parser.add_argument('--batch-size', type=int, default=25)
     args = parser.parse_args()
     document = json.loads(args.inventory.read_text(encoding='utf-8'))
     evidence = json.loads(args.evidence.read_text(encoding='utf-8')) if args.evidence else None
+    if args.hcad_exemptions:
+        from hcad_exemptions import attach
+        document = attach(document, args.hcad_exemptions)
     result = process(document, args.out / 'checkpoints', evidence, args.batch_size)
     atomic_json(args.out / 'results.json', result)
     print(json.dumps(result['diligence']))

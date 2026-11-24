@@ -6,6 +6,7 @@ on:
       - 'diligence.py'
       - 'pipeline.py'
       - 'enrich.py'
+      - 'hcad_exemptions.py'
       - 'flood.py'
   workflow_dispatch:
   schedule:
@@ -39,6 +40,10 @@ jobs:
         run: python flood.py --inventory state/enrichment/enriched.json --out state/flood --resume state/flood/enriched.json
       - name: Run A1-A10 with real source observations
         run: python diligence.py --inventory state/flood/enriched.json --out state/diligence
+      - name: Verify recorded HCAD exemptions for the review queue
+        run: python hcad_exemptions.py --inventory state/diligence/results.json --out state/exemptions --year 2026
+      - name: Reevaluate with verified exemptions
+        run: python diligence.py --inventory state/flood/enriched.json --hcad-exemptions state/exemptions --out state/diligence
       - uses: actions/cache/save@v4
         with:
           path: |
@@ -50,6 +55,8 @@ jobs:
         if: always()
         with:
           name: harris-dec2026-official-evidence
-          path: state/
+          path: |
+            state/
+            !state/exemptions/**
           retention-days: 90
           if-no-files-found: warn

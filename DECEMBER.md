@@ -20,7 +20,7 @@ run recovered 157 decisions from checkpoints.
 | Module | Verified path | Open evidence |
 | --- | --- | --- |
 | A1 | Official pull, sale date and account reconciliation, flags and cancellations | Complete legal details and grouped lot identities |
-| A2 | HCAD GIS area, class, improvement value, location and geometry | Parcel verification of vacancy and homestead |
+| A2 | HCAD GIS area, class, improvement value, location and geometry, plus recorded exemptions for the review queue | Current physical vacancy and any unresolved homestead evidence |
 | A3 | Validates supplied closed duplex sales and computes median sale price per sqft | Authorized closed-sale data |
 | A4 | Validates parcel-specific feasibility, access and restrictions evidence | Dwelling entitlement, restrictions, access and constructability records |
 | A5 | FEMA observations in a live run | FEMA coverage review and MAAPnext parcel evidence. MAAPnext draft mapping is a risk signal |
@@ -89,3 +89,31 @@ Sources: [Official tax sales](https://www.hctax.net/Property/TaxSales),
 [HCAD downloads](https://hcad.org/pdata/pdata-property-downloads.html),
 [MAAPnext draft maps](https://www.maapnext.org/),
 [Houston development guidance](https://www.houstontx.gov/planning/livableplacesfaq).
+
+## HCAD exemption follow-up
+
+The December live workflow runs `hcad_exemptions.py` for the HOLD queue and
+joins results by account and appraisal year. It reads the HCAD Online Tax
+Bills exemptions table. An explicit `None` confirms that the table listed no
+exemptions for that account and year. A residential homestead entry excludes
+the property. Ambiguous labels, source errors and unverified years yield
+UNKNOWN. Conflicting vacancy or homestead evidence requires review. A tax
+exemption observation does not establish the property's legal redemption
+classification or current physical occupancy. The runner spaces requests,
+retries transient failures and stops after three consecutive source errors.
+Local checkpoint observations expire after 48 hours. Public workflow artifacts
+exclude raw exemption pages and other exemption labels.
+
+For a local run, use the initial December results as input and pass the
+resulting directory back to diligence:
+
+```bash
+python hcad_exemptions.py --inventory state/diligence/results.json --out state/exemptions --year 2026
+python diligence.py --inventory state/flood/enriched.json --hcad-exemptions state/exemptions --out state/diligence
+```
+
+The live review checked all 75 initial HOLD accounts. HCAD listed residential
+homestead on 20, no exemptions on 54, and gave one inconclusive result. The
+revised disposition was 55 HOLD and 102 NO_BID. Seven accounts in priority ZIPs
+showed a land classification, zero building and improvement values and at least
+5,000 sqft. They still need current physical vacancy evidence.
